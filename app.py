@@ -1,26 +1,44 @@
-from dotenv import load_dotenv
-load_dotenv()  # This reads the .env file automatically
-import os
-import random
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI, OpenAIError
+import os
+import openai
+from dotenv import load_dotenv
+import random
+
+# Load environment variables from .env
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Two OpenAI clients
-llm_clients = [
-    OpenAI(api_key=os.getenv("OPENAI_API_KEY")),        # Primary
-    OpenAI(api_key=os.getenv("OPENAI_API_KEY_SECOND")) # Secondary
+# Load multiple OpenAI API keys
+API_KEYS = [
+    os.getenv("OPENAI_API_KEY_1"),
+    os.getenv("OPENAI_API_KEY_2")
 ]
 
-@app.route("/")
-def home():
-    return jsonify({"message": "Expert Chatbots Backend Running"})
+# Filter out None keys
+API_KEYS = [key for key in API_KEYS if key]
+
+if not API_KEYS:
+    raise ValueError("No OpenAI API keys found in environment variables.")
+
+def get_openai_client():
+    """Return a client using a random available API key (for failover)."""
+    key = random.choice(API_KEYS)
+    openai.api_key = key
+    return openai
 
 @app.route("/debate", methods=["POST"])
 def debate():
+    """
+    Expects JSON: { "topic": str, "expert1": str, "expert2": str }
+    Returns JSON:
+    {
+        "debate": "text of debate...",
+        "figure": { "type": "bar", "labels": [...], "values": [...] }
+    }
+    """
     data = request.get_json()
     topic = data.get("topic")
     expert1 = data.get("expert1")
@@ -30,47 +48,50 @@ def debate():
         return jsonify({"error": "Missing topic or expert names"}), 400
 
     prompt = (
-        f'Simulate a debate between {expert1} and {expert2} on the topic: "{topic}".\n\n'
-        'Each expert should:\n'
-        '1. Give a short opening statement.\n'
-        '2. Reference a numeric research finding (include a percentage or number).\n\n'
-        'Keep each response under 150 words.'
+        f"Simulate a debate between {expert1} and {expert2} on the topic: \"{topic}\".\n\n"
+        "Provide a few short back-and-forth exchanges separated by double newlines.\n"
+        "Keep it concise but informative."
     )
 
-    debate_text = None
+    client = get_openai_client()
 
-    # Try each API key in order
-    for client in llm_clients:
-        if client.api_key:  # Skip if key is None
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7
-                )
-                debate_text = response.choices[0].message.content
-                break  # Success! Stop trying other keys
-            except OpenAIError as e:
-                print(f"API key failed: {e}")
-                continue  # Try next key
+    try:
+        response = client.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=300
+        )
 
-    # Fallback if all APIs fail
-    if not debate_text:
-        debate_text = f"Mock debate between {expert1} and {expert2} on {topic}."
+        debate_text = response.choices[0].message.content
 
-    figure_data = {
-        "type": "bar",
-        "labels": ["Baseline", "Improved"],
-        "values": [random.randint(50, 80), random.randint(60, 95)]
-    }
+        # Dummy figure data for chart
+        figure_data = {
+            "type": "bar",
+            "labels": ["Supporting", "Opposing"],
+            "values": [5, 3]
+        }
 
-    return jsonify({
-        "topic": topic,
-        "expert1": expert1,
-        "expert2": expert2,
-        "debate": debate_text,
-        "figure": figure_data
-    })
+        return jsonify({
+            "debate": debate_text,
+            "figure": figure_data
+        })
+
+    except openai.error.RateLimitError:
+        # Try switching to the other key if available
+        if len(API_KEYS) > 1:
+            API_KEYS.reverse()  # simple failover
+            return jsonify({"error": "Quota exceeded on first key. Please retry; backend switched API key."}), 429
+        else:
+            return jsonify({"error": "Quota exceeded. No alternative API keys available."}), 429
+
+    except openai.error.OpenAIError as e:
+        return jsonify({"error": str(e)}), 500
+
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
