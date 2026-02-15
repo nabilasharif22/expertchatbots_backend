@@ -22,9 +22,26 @@ def home():
 def generate_expert_response(client, expert_name, topic, conversation_history, is_opening=False):
     """Generate a single expert's response based on conversation history."""
     if is_opening:
-        system_prompt = f"You are {expert_name}, engaging in a natural conversation about {topic}. Start with a brief, conversational opening statement (2-3 sentences). Be personable and authentic, not overly formal. Share your perspective naturally."
+        system_prompt = f"""You are {expert_name}. Speak in YOUR authentic voice and style - use the vocabulary, tone, and manner of expression that {expert_name} was known for. 
+        
+You're having a conversation about {topic}. Give an opening statement that:
+- Reflects YOUR unique perspective and expertise (4-6 sentences)
+- Incorporates specific findings, theories, or considerations that {expert_name} would actually reference
+- Uses language and phrasing characteristic of how {expert_name} communicated
+- Sounds natural and conversational, not rehearsed
+
+Be authentic to {expert_name}'s worldview, era, and intellectual style."""
     else:
-        system_prompt = f"You are {expert_name}, continuing a conversation about {topic}. Respond naturally to what was just said. Be conversational, ask questions, acknowledge points, and share insights. Keep it to 2-3 sentences. Sound human, not like a debate robot."
+        system_prompt = f"""You are {expert_name}. Continue speaking in YOUR authentic voice and style.
+        
+Respond to what was just said (4-6 sentences):
+- Reference YOUR specific work, experiments, or theories when relevant
+- Ask thoughtful questions that {expert_name} would actually ask
+- Challenge or build on ideas using {expert_name}'s characteristic reasoning style
+- Use vocabulary and expressions that match how {expert_name} actually spoke/wrote
+- Be conversational but intellectually substantive
+
+Stay true to {expert_name}'s personality, expertise, and historical context."""
     
     messages = [{"role": "system", "content": system_prompt}] + conversation_history
     
@@ -32,8 +49,8 @@ def generate_expert_response(client, expert_name, topic, conversation_history, i
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.8,
-            max_tokens=150
+            temperature=0.9,
+            max_tokens=250
         )
         return response.choices[0].message.content
     except OpenAIError as e:
@@ -46,7 +63,7 @@ def debate():
     topic = data.get("topic")
     expert1 = data.get("expert1")
     expert2 = data.get("expert2")
-    turns = data.get("turns", 3)  # Number of back-and-forth exchanges
+    turns = data.get("turns", 4)  # Number of back-and-forth exchanges
 
     if not topic or not expert1 or not expert2:
         return jsonify({"error": "Missing topic or expert names"}), 400
@@ -76,22 +93,22 @@ def debate():
         debate_exchanges = [
             {
                 "speaker": expert1,
-                "statement": f"You know, I've been thinking a lot about {topic} lately. I think there's so much potential here that we're just beginning to understand.",
+                "statement": f"I've spent considerable time examining {topic}, and I must say, the fundamental principles at work here are quite fascinating. Based on my research and observations, I believe we're dealing with forces that could fundamentally reshape how we understand this domain. The theoretical framework I've been developing suggests there are profound implications we haven't fully explored yet. What's your initial take on this?",
                 "turn": 1
             },
             {
                 "speaker": expert2,
-                "statement": f"That's interesting you say that. I actually have some concerns about {topic}. What aspects excite you the most?",
+                "statement": f"That's a compelling perspective, though I find myself approaching {topic} from a somewhat different angle. In my own work, I've encountered certain challenges that make me question some of the prevailing assumptions. The experimental evidence I've gathered points to complexities that aren't immediately obvious. I'm particularly concerned about the practical applications and whether we've adequately considered the long-term consequences. Have you encountered similar concerns in your research?",
                 "turn": 1
             },
             {
                 "speaker": expert1,
-                "statement": f"Well, mainly the opportunities it creates. But I'm curious - what concerns do you have?",
+                "statement": f"Your concerns are valid, and I appreciate the empirical rigor you bring to this discussion. However, my findings suggest that many of these challenges can be addressed through systematic analysis and careful methodology. I've observed patterns that indicate the benefits could far outweigh the risks, provided we approach this with the proper intellectual framework. The key, I believe, lies in understanding the underlying mechanisms at a deeper level.",
                 "turn": 2
             },
             {
                 "speaker": expert2,
-                "statement": f"Mainly the ethical implications and long-term effects we might not be considering yet.",
+                "statement": f"I respect your theoretical approach, but I must emphasize what I've learned through direct experimentation and observation. Theory is essential, certainly, but we must ground our conclusions in reproducible results and practical realities. In my laboratory work on related phenomena, I've discovered that the gap between theoretical predictions and actual outcomes can be substantial. We need to remain cautious and methodical rather than rushing forward based on promising hypotheses alone.",
                 "turn": 2
             }
         ]
