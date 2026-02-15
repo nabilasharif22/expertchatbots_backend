@@ -77,6 +77,7 @@ def debate():
     
     # Try each API key until one works
     working_client = None
+    api_error_message = None
     for client in llm_clients:
         if client.api_key:
             try:
@@ -85,8 +86,14 @@ def debate():
                 if test_response:
                     working_client = client
                     break
-            except:
+            except Exception as e:
+                api_error_message = str(e)
+                print(f"API Error: {e}")
                 continue
+    
+    # Log if falling back to mock data
+    if not working_client:
+        print(f"Using mock data. Last API error: {api_error_message}")
     
     if not working_client:
         # Fallback mock data
@@ -154,4 +161,3 @@ def debate():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
-
